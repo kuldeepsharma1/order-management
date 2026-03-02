@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { CancellationService } from "../services/cancellation.service";
-
+import { SYSTEM_USER_ID } from "../constants/system-user";
 // Validate the cancellation payload
 const cancelOrderSchema = z.object({
   reason: z.string().min(5, "Please provide a valid reason for cancellation (min 5 characters)"),
@@ -11,7 +11,7 @@ export const cancelOrder = async (req: Request, res: Response, next: NextFunctio
   try {
     const tenantId = res.locals.tenantId;
     const orderId = String(req.params.id);
-    const userId = "SYSTEM_USER_TEMP"; // Replace with auth token user ID later
+    const userId = SYSTEM_USER_ID;
 
     const { reason } = cancelOrderSchema.parse(req.body);
 

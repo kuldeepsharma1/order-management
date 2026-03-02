@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { OrderService, createOrderSchema } from "../services/order.service";
+import { SYSTEM_USER_ID } from "../constants/system-user";
 
 export const createOrder = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -7,7 +8,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     
     // For now, we hardcode the user ID since Auth isn't built yet.
     // In production: const userId = req.user.id;
-    const userId = "SYSTEM_USER_TEMP"; 
+     const userId = SYSTEM_USER_ID; 
 
     // 1. Validate payload
     const validatedData = createOrderSchema.parse(req.body);
@@ -38,7 +39,7 @@ export const shipOrder = async (req: Request, res: Response, next: NextFunction)
   try {
     const tenantId = res.locals.tenantId;
     const orderId = String(req.params.id);
-    const userId = "SYSTEM_USER_TEMP";
+    const userId = SYSTEM_USER_ID; 
 
     const updatedOrder = await OrderService.shipOrder(tenantId, orderId, userId);
     

@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { PaymentService, processPaymentSchema } from "../services/payment.service";
+import { SYSTEM_USER_ID } from "../constants/system-user";
 
 export const processPayment = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenantId = res.locals.tenantId;
-    const userId = "SYSTEM_USER_TEMP"; // Replace with auth token user ID later
+    const userId = SYSTEM_USER_ID;
 
     // 1. Validate incoming data
     const validatedData = processPaymentSchema.parse(req.body);
