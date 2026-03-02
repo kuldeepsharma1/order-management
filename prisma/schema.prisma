@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -10,24 +7,317 @@ datasource db {
   provider = "sqlite"
 }
 
+//////////////////////////
+// TENANT
+//////////////////////////
 
 model Tenant {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   name      String
-  createdAt DateTime  @default(now())
+  currency  String   @default("USD")
+  metadata  Json?
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  users     User[]
+  customers Customer[]
   products  Product[]
+  orders    Order[]
+  roles     Role[]
+
+  @@index([deletedAt])
 }
+
+//////////////////////////
+// RBAC
+//////////////////////////
+
+model Role {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  users  User[]
+  rolePermissions RolePermission[]
+
+  @@index([tenantId])
+}
+
+model Permission {
+  id       String @id @default(uuid())
+  action   String
+  resource String
+
+  rolePermissions RolePermission[]
+
+  @@unique([action, resource])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+//////////////////////////
+// USERS
+//////////////////////////
+
+model User {
+  id        String   @id @default(uuid())
+  tenantId  String
+  email     String
+  roleId    String
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  @@unique([tenantId, email])
+  @@index([tenantId, deletedAt])
+}
+
+//////////////////////////
+// CUSTOMERS
+//////////////////////////
+
+model Customer {
+  id        String @id @default(uuid())
+  tenantId  String
+  name      String
+  email     String
+  phone     String?
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  orders Order[]
+
+  @@index([tenantId, email])
+  @@index([tenantId, deletedAt])
+}
+
+//////////////////////////
+// PRODUCTS
+//////////////////////////
 
 model Product {
   id        String   @id @default(uuid())
   tenantId  String
   name      String
-  price     Decimal
+  sku       String
+  skuNormalized String
   stock     Int
+  version   Int      @default(1)
+  metadata  Json?
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  prices ProductPrice[]
+  inventory InventoryTransaction[]
 
-  @@index([tenantId])
+  @@unique([tenantId, skuNormalized])
+  @@index([tenantId, deletedAt])
+}
+
+//////////////////////////
+// PRICING HISTORY
+//////////////////////////
+
+model ProductPrice {
+  id        String   @id @default(uuid())
+  tenantId  String
+  productId String
+
+  /// price stored in smallest currency unit (cents / paise)
+  price     Int
+
+  currency  String
+  active    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([tenantId, productId, active])
+}
+
+//////////////////////////
+// INVENTORY LEDGER
+//////////////////////////
+
+model InventoryTransaction {
+  id        String   @id @default(uuid())
+  tenantId  String
+  productId String
+  quantity  Int
+  type      InventoryType
+  reference String?
+
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([tenantId, productId, createdAt])
+}
+
+enum InventoryType {
+  PURCHASE
+  SALE
+  ADJUSTMENT
+  RETURN
+}
+
+//////////////////////////
+// ORDERS
+//////////////////////////
+
+model Order {
+  id          String   @id @default(uuid())
+  tenantId    String
+  customerId  String
+
+  /// stored in cents
+  totalAmount Int
+  paidAmount  Int @default(0)
+
+  currency    String
+  status      OrderStatus
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  items    OrderItem[]
+  payments Payment[]
+  history  OrderHistory[]
+
+  @@index([tenantId, status, createdAt])
+}
+
+//////////////////////////
+// ORDER SNAPSHOT
+//////////////////////////
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  tenantId    String
+  orderId     String
+  productId   String
+  productName String
+
+  /// price in cents
+  price       Int
+
+  quantity    Int
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([tenantId, orderId])
+}
+
+//////////////////////////
+// ORDER HISTORY
+//////////////////////////
+
+model OrderHistory {
+  id        String      @id @default(uuid())
+  tenantId  String
+  orderId   String
+  status    OrderStatus
+  reason    String?
+  changedBy String
+
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([tenantId, orderId, createdAt])
+}
+
+//////////////////////////
+// PAYMENTS
+//////////////////////////
+
+model Payment {
+  id        String   @id @default(uuid())
+  tenantId  String
+  orderId   String
+
+  /// amount in cents
+  amount    Int
+
+  currency  String
+  status    PaymentStatus
+  gateway   String
+  reference String?
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  refunds Refund[]
+
+  @@index([tenantId, orderId, status])
+}
+
+//////////////////////////
+// REFUNDS
+//////////////////////////
+
+model Refund {
+  id        String   @id @default(uuid())
+  tenantId  String
+  paymentId String
+
+  /// amount in cents
+  amount    Int
+
+  reason    String?
+
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([tenantId, paymentId])
+}
+
+//////////////////////////
+// ENUMS
+//////////////////////////
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
 }
