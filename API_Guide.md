@@ -1,452 +1,442 @@
-# Order Management API Guide (Full Reference)
+#  Order Management System - Comprehensive API Documentation
 
-This document lists every currently exposed API in this project and how to call it.
+Welcome to the Order Management System API. This system is designed with a **Multi-Tenant Architecture**, meaning a single instance of the application can serve multiple isolated organizations (Tenants).
 
-## 1) Base URL, versioning, and headers
+##  Core Concepts for Developers
 
-- **Local base URL:** `http://localhost:<PORT>` (default port: `5000`).
-- **Versioned API prefix:** `/api/v1`.
-- **Required tenant header for all `/api/v1/*` routes:**
-  - `x-tenant-id: <tenant-uuid-or-tenant-id-string>`
-- **Content type for request bodies:**
-  - `Content-Type: application/json`
+Before making API calls, please understand the following system rules:
 
-> If `x-tenant-id` is missing, the API returns:
->
-> ```json
-> {
->   "message": "Missing x-tenant-id header. Tenant context is required."
-> }
-> ```
+1. **Multi-Tenancy Header (`x-tenant-id`)**: Every request (except managing the tenants themselves) MUST include the `x-tenant-id` header. This ensures data is strictly isolated between organizations.
+2. **Money is Stored in Cents**: To prevent floating-point calculation errors, all currency amounts (`price`, `totalAmount`, `paidAmount`) are passed and stored as integers representing the smallest currency unit (e.g., `$10.50` is passed as `1050`).
+3. **Soft Deletes**: Deleting a resource (User, Product, Customer) does not permanently erase it from the database. It sets a `deletedAt` timestamp to maintain historical integrity.
 
-## 2) Health endpoint
+##  Base URL
 
-### GET `/health`
-Simple liveness check.
+```text
+http://localhost:5000/api/v1
 
-#### Example
-```bash
-curl -X GET "http://localhost:5000/health"
 ```
 
-#### Success response (200)
+---
+
+##  1. Tenant Management
+
+Tenants represent the overarching organizations using the platform. **Do not** use the `x-tenant-id` header for these routes.
+
+### `POST /tenants` - Create a Tenant
+
+* **Description:** Onboards a new organization.
+* **Request Body:**
 ```json
 {
-  "status": "OK"
+  "name": "Stark Industries",
+  "currency": "USD",
+  "metadata": { "region": "North America" } 
 }
+
 ```
 
----
 
-## 3) Customer APIs
-
-Base path: `/api/v1/customers`
-
-### 3.1 GET `/api/v1/customers`
-Fetch all non-deleted customers for a tenant.
-
-#### Example
-```bash
-curl -X GET "http://localhost:5000/api/v1/customers" \
-  -H "x-tenant-id: TENANT_ID"
-```
-
-#### Success response (200)
-Array of customer objects.
-
----
-
-### 3.2 POST `/api/v1/customers`
-Create a customer.
-
-#### Request body
+*(Note: `currency` must be a 3-letter code. `metadata` is an optional JSON object).*
+* **Success Response (201 Created):**
 ```json
 {
-  "name": "Acme Buyer",
-  "email": "buyer@acme.com",
-  "phone": "+1-555-0001"
+  "message": "Tenant created successfully",
+  "data": {
+    "id": "abc-123-uuid",
+    "name": "Stark Industries",
+    "currency": "USD",
+    "createdAt": "2024-05-10T10:00:00.000Z"
+  }
 }
+
 ```
 
-#### Example
-```bash
-curl -X POST "http://localhost:5000/api/v1/customers" \
-  -H "x-tenant-id: TENANT_ID" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Acme Buyer",
-    "email": "buyer@acme.com",
-    "phone": "+1-555-0001"
-  }'
-```
 
-#### Success response (201)
-Created customer object.
 
----
+### `GET /tenants` - List All Tenants
 
-### 3.3 PATCH `/api/v1/customers/:id`
-Update customer fields (`name`, `email`, `phone`).
+* **Description:** Returns an array of all active tenants.
+* **Response (200 OK):** `[ { ...tenantObject }, ... ]`
 
-#### Request body (any subset)
+### `GET /tenants/:id` - Get Tenant Details
+
+* **Description:** Fetch a specific organization's configuration.
+* **Response (200 OK):** `{ ...tenantObject }`
+
+### `PATCH /tenants/:id` - Update Tenant
+
+* **Description:** Update an existing tenant's name or metadata.
+* **Request Body:** (All fields optional)
 ```json
 {
-  "name": "Acme Buyer Updated",
-  "email": "buyer.updated@acme.com"
+  "name": "Stark Global"
 }
+
 ```
 
-#### Example
-```bash
-curl -X PATCH "http://localhost:5000/api/v1/customers/<customerId>" \
-  -H "x-tenant-id: TENANT_ID" \
-  -H "Content-Type: application/json" \
-  -d '{ "name": "Acme Buyer Updated" }'
-```
 
-#### Success response (200)
+* **Response (200 OK):** Returns the updated tenant object.
+
+### `DELETE /tenants/:id` - Soft-Delete Tenant
+
+* **Description:** Deactivates the tenant.
+* **Response (204 No Content):** Empty body.
+
+---
+
+##  2. Role-Based Access Control (RBAC)
+
+Manage custom roles for staff members within a specific tenant.
+**Header Required:** `x-tenant-id: <tenant_uuid>`
+
+### `POST /roles` - Create a Role
+
+* **Request Body:**
 ```json
 {
-  "message": "Customer updated successfully",
-  "data": { "...": "updated customer" }
+  "name": "Warehouse Manager"
 }
+
 ```
 
-#### Not found (404)
-```json
-{ "message": "Customer not found" }
-```
 
----
-
-### 3.4 DELETE `/api/v1/customers/:id`
-Soft delete a customer.
-
-#### Example
-```bash
-curl -X DELETE "http://localhost:5000/api/v1/customers/<customerId>" \
-  -H "x-tenant-id: TENANT_ID"
-```
-
-#### Success response
-- `204 No Content`
-
----
-
-## 4) Product APIs
-
-Base path: `/api/v1/products`
-
-### 4.1 GET `/api/v1/products`
-List non-deleted products with active price.
-
-#### Example
-```bash
-curl -X GET "http://localhost:5000/api/v1/products" \
-  -H "x-tenant-id: TENANT_ID"
-```
-
-#### Success response (200)
-Array of product objects (including active price relation).
-
----
-
-### 4.2 POST `/api/v1/products`
-Create product + active price + initial inventory ledger entry.
-
-#### Request body
+* **Response (201 Created):**
 ```json
 {
-  "name": "Widget A",
-  "sku": "WIDGET-A",
-  "stock": 100,
-  "price": 1999
+  "message": "Role created successfully",
+  "data": {
+    "id": "role-123-uuid",
+    "tenantId": "abc-123-uuid",
+    "name": "Warehouse Manager"
+  }
 }
+
 ```
 
-> `price` is in **cents**.
 
-#### Example
-```bash
-curl -X POST "http://localhost:5000/api/v1/products" \
-  -H "x-tenant-id: TENANT_ID" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Widget A",
-    "sku": "WIDGET-A",
-    "stock": 100,
-    "price": 1999
-  }'
+
+### `GET /roles` - List Roles
+
+* **Description:** Returns all roles for the tenant, including a count of how many users have that role.
+* **Response (200 OK):**
+```json
+[
+  {
+    "id": "role-123-uuid",
+    "name": "Warehouse Manager",
+    "_count": { "users": 5 }
+  }
+]
+
 ```
 
-#### Success response (201)
-Created product with related `prices` and `inventory`.
+
 
 ---
 
-### 4.3 PATCH `/api/v1/products/:id`
-Update product name, active price version, and/or stock adjustment.
+##  3. User Management
 
-#### Request body (any subset)
+Manage admin/staff accounts.
+**Header Required:** `x-tenant-id: <tenant_uuid>`
+
+### `POST /users` - Create a User
+
+* **Request Body:**
 ```json
 {
-  "name": "Widget A+",
-  "price": 2499,
-  "stockAdjustment": -3,
-  "reason": "Damaged units"
+  "email": "employee@starkindustries.com",
+  "roleId": "<uuid_of_warehouse_manager_role>"
 }
+
 ```
 
-- `price`: new active price in cents.
-- `stockAdjustment`: integer; positive adds stock, negative removes stock.
 
-#### Example
-```bash
-curl -X PATCH "http://localhost:5000/api/v1/products/<productId>" \
-  -H "x-tenant-id: TENANT_ID" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "price": 2499,
-    "stockAdjustment": 10,
-    "reason": "Cycle count correction"
-  }'
-```
+* **Response (201 Created):** Returns the created user object including nested role data.
 
-#### Success response (200)
+### `GET /users` - List Users
+
+* **Response (200 OK):** Array of user objects.
+
+### `PATCH /users/:id` - Update User
+
+* **Description:** Change a user's role or metadata.
+* **Request Body:**
 ```json
 {
-  "message": "Product updated",
-  "data": { "...": "updated product with active prices" }
+  "roleId": "<uuid_of_new_role>"
 }
+
 ```
 
-#### Common errors
-- `404` if product not found.
-- `400` if stock would go below zero.
+
+* **Response (200 OK):** Returns updated user object.
+
+### `DELETE /users/:id` - Soft-Delete User
+
+* **Response (204 No Content)**
 
 ---
 
-## 5) Order APIs
+##  4. Customer Management
 
-Base path: `/api/v1/orders`
+Manage the end-consumers who buy products.
+**Header Required:** `x-tenant-id: <tenant_uuid>`
 
-### 5.1 POST `/api/v1/orders`
-Create an order, deduct stock, create order history, and inventory sale logs transactionally.
+### `POST /customers` - Create Customer
 
-#### Request body
+* **Request Body:**
 ```json
 {
-  "customerId": "<customer-uuid>",
+  "name": "Peter Parker",
+  "email": "peter@webs.com",
+  "phone": "+19876543210"
+}
+
+```
+
+
+* **Response (201 Created):** Returns customer object.
+
+### `GET /customers` - List Customers
+
+* **Response (200 OK):** Array of customers.
+
+### `GET /customers/:id` - Get Customer Details
+
+* **Response (200 OK):** Single customer object.
+
+### `PATCH /customers/:id` - Update Customer
+
+* **Request Body:** (All fields optional)
+```json
+{
+  "phone": "+10000000000"
+}
+
+```
+
+
+* **Response (200 OK)**
+
+### `DELETE /customers/:id` - Soft-Delete Customer
+
+* **Response (204 No Content)**
+
+---
+
+##  5. Product Management
+
+Manage catalog items.
+**Header Required:** `x-tenant-id: <tenant_uuid>`
+
+### `POST /products` - Create Product
+
+* **Description:** Creates a product, sets its initial stock, and logs an active price in the `ProductPrice` history.
+* **Request Body:**
+```json
+{
+  "name": "Web Shooter Fluid",
+  "sku": "WEB-FLUID-01",
+  "price": 2500, 
+  "stock": 100
+}
+
+```
+
+
+*(Note: `price` is 2500 cents = $25.00)*
+* **Response (201 Created):** Returns product object.
+
+### `GET /products` - List Products
+
+* **Response (200 OK):** Array of products with their current active price.
+
+### `GET /products/:id` - Get Product Details
+
+* **Response (200 OK):** Returns product object, including an array of its historical prices (`prices` relation).
+
+### `PATCH /products/:id` - Update Product
+
+* **Description:** Updates name, stock, or price. If `price` is updated, the system automatically deactivates the old price and creates a new `ProductPrice` entry. If `stock` is updated, it creates an `ADJUSTMENT` entry in the Inventory Ledger.
+* **Request Body:**
+```json
+{
+  "price": 3000,
+  "stock": 150
+}
+
+```
+
+
+
+### `DELETE /products/:id` - Soft-Delete Product
+
+* **Response (204 No Content)**
+
+---
+
+##  6. Inventory Ledger
+
+View the immutable audit trail of stock changes.
+**Header Required:** `x-tenant-id: <tenant_uuid>`
+
+### `GET /inventory` - View Ledger
+
+* **Query Parameters (Optional):**
+* `productId`: Filter by a specific product UUID.
+* `type`: Filter by transaction type (`PURCHASE`, `SALE`, `ADJUSTMENT`, `RETURN`).
+
+
+* **Example Request:** `GET /inventory?type=SALE`
+* **Response (200 OK):**
+```json
+[
+  {
+    "id": "inv-123-uuid",
+    "productId": "prod-123-uuid",
+    "quantity": -2,
+    "type": "SALE",
+    "reference": "Order ID xyz",
+    "createdAt": "2024-05-10T11:00:00.000Z"
+  }
+]
+
+```
+
+
+
+---
+
+##  7. Order Management
+
+Manage the order lifecycle. Orders track line items and total amounts.
+**Header Required:** `x-tenant-id: <tenant_uuid>`
+
+### `POST /orders` - Create Order
+
+* **Description:** Creates an order in `PENDING` status. Deducts stock from inventory (logs a `SALE` in the ledger).
+* **Request Body:**
+```json
+{
+  "customerId": "<uuid_of_customer>",
   "items": [
     {
-      "productId": "<product-uuid>",
+      "productId": "<uuid_of_product_1>",
       "quantity": 2
     },
     {
-      "productId": "<product-uuid>",
+      "productId": "<uuid_of_product_2>",
       "quantity": 1
     }
   ]
 }
+
 ```
 
-#### Example
-```bash
-curl -X POST "http://localhost:5000/api/v1/orders" \
-  -H "x-tenant-id: TENANT_ID" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "customerId": "00000000-0000-0000-0000-000000000000",
-    "items": [
-      { "productId": "11111111-1111-1111-1111-111111111111", "quantity": 2 }
-    ]
-  }'
-```
 
-#### Success response (201)
-```json
-{
-  "message": "Order placed successfully",
-  "data": { "...": "order with items and history" }
-}
-```
+* **Response (201 Created):** Returns the Order object, containing `totalAmount` calculated by the server.
 
-#### Common errors
-- `409` insufficient stock.
-- `404` product not found.
+### `GET /orders` - List Orders
 
----
+* **Query Parameters (Optional):** `status` (e.g., `?status=PENDING`)
+* **Response (200 OK):** Array of order objects.
 
-### 5.2 POST `/api/v1/orders/:id/ship`
-Ship an order.
+### `GET /orders/:id` - Get Order Details
 
-> Business rule: only `CONFIRMED` orders can be shipped.
+* **Response (200 OK):** Returns the full order, deeply nested with `items`, `customer`, and `payments`.
 
-#### Example
-```bash
-curl -X POST "http://localhost:5000/api/v1/orders/<orderId>/ship" \
-  -H "x-tenant-id: TENANT_ID"
-```
+### `GET /orders/:id/history` - View Order Audit Trail
 
-#### Success response (200)
-```json
-{
-  "message": "Order shipped",
-  "data": { "...": "updated order" }
-}
-```
+* **Response (200 OK):** Returns an array of `OrderHistory` records showing exactly when the status changed and who changed it.
 
-#### Common errors
-- `404` order not found.
-- `400` if order status is not shippable.
+### `POST /orders/:id/ship` - Ship Order
 
----
+* **Description:** Changes status to `SHIPPED`. Order MUST be `CONFIRMED` (fully paid) first.
+* **Response (200 OK):** Returns updated order.
 
-### 5.3 POST `/api/v1/orders/:id/cancel`
-Cancel an order.
+### `POST /orders/:id/cancel` - Cancel Order
 
-#### Request body
+* **Description:** Changes status to `CANCELLED`. Restores stock to inventory (logs a `RETURN`). Automatically issues refunds for any completed payments.
+* **Request Body:**
 ```json
 {
   "reason": "Customer requested cancellation"
 }
+
 ```
 
-#### Example
-```bash
-curl -X POST "http://localhost:5000/api/v1/orders/<orderId>/cancel" \
-  -H "x-tenant-id: TENANT_ID" \
-  -H "Content-Type: application/json" \
-  -d '{ "reason": "Customer requested cancellation" }'
-```
 
-#### Success response (200)
-```json
-{
-  "message": "Order successfully cancelled",
-  "data": { "...": "updated order" }
-}
-```
-
-#### Common errors
-- `404` order not found.
-- `400` if order cannot be cancelled (for example already shipped/cancelled).
 
 ---
 
-## 6) Payment APIs
+##  8. Payment Management
 
-Base path: `/api/v1/payments`
+Process financial transactions against orders.
+**Header Required:** `x-tenant-id: <tenant_uuid>`
 
-### 6.1 POST `/api/v1/payments`
-Process payment for an order.
+### `POST /payments` - Process Payment
 
-If fully paid, order is auto-transitioned to `CONFIRMED` and history is recorded.
-
-#### Request body
+* **Description:** Processes a payment. If the `amount` matches the order's `totalAmount`, the Order status automatically changes to `CONFIRMED`.
+* **Request Body:**
 ```json
 {
-  "orderId": "<order-uuid>",
-  "amount": 1500,
-  "gateway": "stripe",
-  "reference": "ch_123"
+  "orderId": "<uuid_of_pending_order>",
+  "amount": 5000,
+  "gateway": "STRIPE",
+  "reference": "ch_12345ABCD"
 }
+
 ```
 
-- `amount` is in **cents**.
 
-#### Example
-```bash
-curl -X POST "http://localhost:5000/api/v1/payments" \
-  -H "x-tenant-id: TENANT_ID" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "orderId": "22222222-2222-2222-2222-222222222222",
-    "amount": 1500,
-    "gateway": "stripe",
-    "reference": "ch_123"
-  }'
-```
+*(Note: `amount` is in cents)*
+* **Response (201 Created)**
 
-#### Success response (201)
-```json
-{
-  "message": "Payment processed successfully",
-  "data": {
-    "payment": { "...": "payment row" },
-    "order": { "...": "updated order" }
-  }
-}
-```
+### `GET /payments` - List Payments
 
-#### Common errors
-- `404` order not found.
-- `400` cannot pay cancelled/refunded orders.
-- `400` payment amount exceeds remaining balance.
+* **Query Parameters (Optional):** `orderId`
+* **Response (200 OK):** Array of payment records.
+
+### `GET /payments/:id` - Get Payment Details
+
+* **Response (200 OK):** Includes nested data showing if any `refunds` were issued against this specific payment.
 
 ---
 
-## 7) Validation and error format
+##  9. Refund Management
 
-### 7.1 Validation errors (Zod) – 400
-When request validation fails:
+Manually track and issue refunds independent of full order cancellations.
+**Header Required:** `x-tenant-id: <tenant_uuid>`
 
+### `POST /refunds` - Issue Manual Refund
+
+* **Description:** Refunds a completed payment. Prevents refunding more than the original payment amount.
+* **Request Body:**
 ```json
 {
-  "message": "Validation failed",
-  "errors": [
-    {
-      "field": "items.0.quantity",
-      "message": "Quantity must be greater than 0"
-    }
-  ]
+  "paymentId": "<uuid_of_completed_payment>",
+  "amount": 2500,
+  "reason": "Returned one item out of two"
 }
+
 ```
 
-### 7.2 Prisma known request conflicts – 409
-On Prisma known request errors with `P2*` codes:
 
-```json
-{
-  "message": "Database conflict error",
-  "code": "P2002",
-  "meta": { "...": "depends on Prisma error" }
-}
-```
+* **Response (201 Created):** Returns the created Refund object.
 
-### 7.3 Unknown route – 404
-```json
-{
-  "message": "Route /your/path not found"
-}
-```
+### `GET /refunds` - List All Refunds
 
-### 7.4 Unhandled errors – 500
-```json
-{
-  "message": "Internal Server Error"
-}
-```
+* **Response (200 OK):** Array of refund objects.
 
 ---
 
-## 8) End-to-end call sequence example
+##  Common Error Status Codes
 
-A common happy path:
+| Code | Meaning | Cause |
+| --- | --- | --- |
+| `400` | Bad Request | Missing required fields, validation failure, insufficient stock, or logic error (e.g., trying to refund more than the total amount). |
+| `401` | Unauthorized | Missing the `x-tenant-id` header. |
+| `404` | Not Found | The requested ID does not exist, or belongs to a different tenant, or has been soft-deleted. |
+| `500` | Internal Server Error | Database connection failed or unhandled exception. |
 
-1. Create customer (`POST /api/v1/customers`)
-2. Create product (`POST /api/v1/products`)
-3. Create order (`POST /api/v1/orders`)
-4. Pay order (`POST /api/v1/payments`) until fully paid => status becomes `CONFIRMED`
-5. Ship order (`POST /api/v1/orders/:id/ship`)
-
-If customer changes mind before shipment, use cancel endpoint:
-- `POST /api/v1/orders/:id/cancel`
-
----
-
-## 9) Notes
-
-- All monetary fields are in smallest currency units (for example cents).
-- Tenant isolation is enforced by requiring `x-tenant-id` header and scoping queries by tenant.
-- User authentication is not implemented yet; operations currently use a temporary system actor internally for audit trail fields.
