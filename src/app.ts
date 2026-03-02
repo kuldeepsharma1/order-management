@@ -8,6 +8,8 @@ import { errorHandler } from "./middleware/error.middleware";
 import { env } from "./config/env";
 import customerRoutes from "./routes/customer.routes";
 import productRoutes from "./routes/product.routes";
+import orderRoutes from "./routes/order.routes";
+import paymentRoutes from "./routes/payment.routes";
 
 const app = express();
 
@@ -54,6 +56,8 @@ app.use(
  */
 app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/products", productRoutes);
+app.use("/api/v1/orders", orderRoutes);
+app.use("/api/v1/payments", paymentRoutes);
 /**
  * 404 Handler
  */
