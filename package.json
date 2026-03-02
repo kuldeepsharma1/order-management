@@ -5,10 +5,10 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-  "dev": "node --env-file=.env --import tsx --watch src/server.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node --env-file=.env --import tsx --watch src/server.ts",
+    "build": "tsup src/server.ts --format esm --clean",
     "start": "node dist/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
@@ -42,6 +42,7 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^25.3.3",
     "prisma": "^7.4.2",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

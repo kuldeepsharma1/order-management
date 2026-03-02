@@ -4,11 +4,13 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "src",
+    
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "prisma.config.ts"]
+  "exclude": ["node_modules", "dist"]
 }

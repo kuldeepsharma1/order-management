@@ -2,7 +2,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { env } from "../config/env";
-import { Prisma } from "../../generated/prisma/client";
+import { Prisma } from "../generated/prisma/client";
 
 export const errorHandler = (
   err: any,
