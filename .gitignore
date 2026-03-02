@@ -1,33 +1,54 @@
+# ------------------------------
 # Node
+# ------------------------------
 node_modules/
-
-# Build
-dist/
-build/
-
-# Logs
-logs/
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Environment
+# ------------------------------
+# Environment variables
+# ------------------------------
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
+# ------------------------------
 # Prisma
+# ------------------------------
 prisma/dev.db
 prisma/dev.db-journal
+prisma/migrations/
 
-# OS
+# If using custom output path:
+src/generated/
+
+# ------------------------------
+# Build output
+# ------------------------------
+dist/
+build/
+
+# ------------------------------
+# Logs
+# ------------------------------
+logs/
+*.log
+
+# ------------------------------
+# OS / Editor
+# ------------------------------
 .DS_Store
 Thumbs.db
-
-# IDE
 .vscode/
 .idea/
 
-# TypeScript
-*.tsbuildinfo
+# ------------------------------
+# Coverage
+# ------------------------------
+coverage/
+dev.db
+
+/generated/prisma
+
+/generated/prisma
