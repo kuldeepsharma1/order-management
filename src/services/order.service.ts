@@ -27,7 +27,7 @@ export class OrderService {
    * Wrapped in a Prisma Interactive Transaction for ACID compliance.
    */
   static async createOrder(tenantId: string, data: CreateOrderInput, changedByUserId: string) {
-    
+
     // START TRANSACTION
     return await prisma.$transaction(async (tx) => {
       let totalAmount = 0;
@@ -132,4 +132,40 @@ export class OrderService {
       return order;
     });
   }
+  /**
+     * Fulfills an order by marking it as SHIPPED.
+     */
+  static async shipOrder(tenantId: string, orderId: string, changedByUserId: string) {
+    return await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { id: orderId, tenantId, deletedAt: null },
+      });
+
+      if (!order) throw new Error("Order not found");
+
+      // Business Rule: Can only ship CONFIRMED (paid) orders.
+      if (order.status !== "CONFIRMED") {
+        throw new Error(`Cannot ship order with status: ${order.status}. Order must be CONFIRMED.`);
+      }
+
+      const updatedOrder = await tx.order.update({
+        where: { id: orderId },
+        data: { status: "SHIPPED" },
+      });
+
+      // Audit Trail
+      await tx.orderHistory.create({
+        data: {
+          tenantId,
+          orderId,
+          status: "SHIPPED",
+          reason: "Items dispatched to customer",
+          changedBy: changedByUserId,
+        },
+      });
+
+      return updatedOrder;
+    });
+  }
+
 }

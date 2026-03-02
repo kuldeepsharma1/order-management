@@ -33,3 +33,19 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     next(error);
   }
 };
+
+export const shipOrder = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = res.locals.tenantId;
+    const orderId = String(req.params.id);
+    const userId = "SYSTEM_USER_TEMP";
+
+    const updatedOrder = await OrderService.shipOrder(tenantId, orderId, userId);
+    
+    res.json({ message: "Order shipped", data: updatedOrder });
+  } catch (error: any) {
+    if (error instanceof Error && error.message.includes("not found")) return res.status(404).json({ message: error.message });
+    if (error instanceof Error && error.message.includes("Cannot ship")) return res.status(400).json({ message: error.message });
+    next(error);
+  }
+};
