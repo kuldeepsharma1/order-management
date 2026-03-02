@@ -6,7 +6,8 @@ import rateLimit from "express-rate-limit";
 import { notFoundHandler } from "./middleware/notFound.middleware";
 import { errorHandler } from "./middleware/error.middleware";
 import { env } from "./config/env";
-
+import customerRoutes from "./routes/customer.routes";
+import productRoutes from "./routes/product.routes";
 
 const app = express();
 
@@ -48,6 +49,11 @@ app.use(
     legacyHeaders: false,
   })
 );
+/**
+ * API Routes
+ */
+app.use("/api/v1/customers", customerRoutes);
+app.use("/api/v1/products", productRoutes);
 /**
  * 404 Handler
  */
