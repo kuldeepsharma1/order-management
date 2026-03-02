@@ -83,3 +83,56 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
     next(error);
   }
 };
+
+
+
+// GET /api/v1/products/:id
+export const getProductById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = res.locals.tenantId;
+    const id = String(req.params.id);
+
+    const product = await prisma.product.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      include: {
+        prices: {
+          orderBy: { createdAt: "desc" } // Show pricing history, newest first
+        }
+      },
+    });
+
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.status(200).json(product);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// DELETE /api/v1/products/:id
+export const deleteProduct = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = res.locals.tenantId;
+    const id = String(req.params.id);
+
+    const existingProduct = await prisma.product.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+
+    if (!existingProduct) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // Soft delete the product
+    await prisma.product.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
